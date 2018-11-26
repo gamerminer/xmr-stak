@@ -680,7 +680,30 @@ std::vector<GpuContext> getAMDDevices(int index)
 		return ctxVec;
 	}
 
-	for (size_t k = 0; k < num_devices; k++)
+	auto &selectedDevs = xmrstak::params::inst().openClDevices;
+	std::vector<int> device_indices;
+
+	if (!selectedDevs.empty())
+	{
+		std::vector<cl_device_id> temp;
+		for (auto idx : selectedDevs) {
+			if (idx >= 0 && idx < device_list.size()) {
+				temp.push_back(device_list[idx]);
+				device_indices.push_back(idx);
+			}
+		}
+		if (temp.empty()) {
+			printer::inst()->print_msg(L0, "WARNING: Device selection error with --opencl-devices. No devices selected.");
+			return ctxVec;
+		}
+		device_list = temp;
+
+	} else {
+		for (int di = 0; di < (int)num_devices; ++di) device_indices.push_back(di);
+	}
+
+
+	for (size_t k = 0; k < device_list.size(); k++)
 	{
 		std::vector<char> devVendorVec(1024);
 		if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_VENDOR, devVendorVec.size(), devVendorVec.data(), NULL)) != CL_SUCCESS)
@@ -732,7 +755,7 @@ std::vector<GpuContext> getAMDDevices(int index)
 			}
 
 			// if environment variable GPU_SINGLE_ALLOC_PERCENT is not set we can not allocate the full memory
-			ctx.deviceIdx = k;
+			ctx.deviceIdx = device_indices[k];
 			ctx.freeMem = std::min(ctx.freeMem, maxMem);
 			ctx.name = std::string(devNameVec.data());
 			ctx.DeviceID = device_list[k];

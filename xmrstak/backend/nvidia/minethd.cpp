@@ -147,35 +147,57 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 	auto miner_algo = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgoRoot();
 
-	if(!configEditor::file_exist(params::inst().configFileNVIDIA))
+	if (xmrstak::params::inst().rebuildNvidiaConfig || !configEditor::file_exist(params::inst().configFileNVIDIA))
 	{
 		autoAdjust adjust;
-		if(!adjust.printConfig())
+		if (!adjust.printConfig())
 			return pvThreads;
 	}
 
-	if(!jconf::inst()->parse_config())
+	if (!jconf::inst()->parse_config())
 	{
 		win_exit();
 	}
 
 	int deviceCount = 0;
-	if(cuda_get_devicecount(&deviceCount) != 1)
+	if (cuda_get_devicecount(&deviceCount) != 1)
 	{
-		std::cout<<"WARNING: NVIDIA no device found"<<std::endl;
+		std::cout << "WARNING: NVIDIA no device found" << std::endl;
 		return pvThreads;
 	}
 	else
 	{
-		std::cout<<"NVIDIA: found "<< deviceCount <<" potential device's"<<std::endl;
+		std::cout << "NVIDIA: found " << deviceCount << " potential device's" << std::endl;
 	}
 
-	size_t i, n = jconf::inst()->GetGPUThreadCount();
-	pvThreads->reserve(n);
+	size_t nMax = jconf::inst()->GetGPUThreadCount();
+	const auto &selectedDevs = xmrstak::params::inst().cudaDevices;
+	std::vector<int> device_indices;
+	if (!selectedDevs.empty())
+	{
+		std::copy_if(
+			selectedDevs.begin(),
+			selectedDevs.end(),
+			std::back_inserter(device_indices),
+			[nMax](int i) {return i < (int)nMax; }
+		);
+	}
+	else
+	{
+		for (int i = 0; i < (int)nMax; ++i)
+			device_indices.push_back(i);
+	}
+
+	if (device_indices.empty()) {
+		printer::inst()->print_msg(L0, "WARNING: No cuda devices selected.");
+		return pvThreads;
+	}
+	pvThreads->reserve(device_indices.size());
 
 	jconf::thd_cfg cfg;
-	for (i = 0; i < n; i++)
+	for (size_t n = 0; n < device_indices.size(); n++)
 	{
+		size_t i = (size_t)device_indices[n];
 		jconf::inst()->GetGPUThreadConfig(i, cfg);
 
 		if(cfg.cpu_aff >= 0)
@@ -191,10 +213,9 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 		minethd* thd = new minethd(pWork, i + threadOffset, cfg);
 		pvThreads->push_back(thd);
-
 	}
 
-	for (i = 0; i < n; i++)
+	for (size_t i = 0; i < pvThreads->size(); i++)
 	{
 		static_cast<minethd*>((*pvThreads)[i])->start_mining();
 	}

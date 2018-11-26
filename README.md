@@ -1,4 +1,14 @@
+## GamerMiner modifications
+Added OpenCL and CUDA device selection command line args. This facilitates automatic AMD/NVIDIA config file generation only for the selected devices. The new command line options are: 
+    
+    --opencl-devices 0,1,..  comma-separated list of OpenCL device indices
+    --rebuild-amd-config     deletes (and forces rebuild of) AMD config file
+    --cuda-devices 0,1,..    comma-separated list of CUDA device indices
+    --rebuild-nvidia-config  deletes (and forces rebuild of) NVIDIA config file
+
+---
 ###### fireice-uk's and psychocrypt's
+
 # XMR-Stak - Cryptonight All-in-One Mining Software
 
 XMR-Stak is a universal Stratum pool miner. This miner supports CPUs, AMD and NVIDIA GPUs and can be used to mine the crypto currencies Monero, Aeon and many more Cryptonight coins.
