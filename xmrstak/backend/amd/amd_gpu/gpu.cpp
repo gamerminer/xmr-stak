@@ -564,16 +564,38 @@ std::vector<GpuContext> getAMDDevices(int index)
 		return ctxVec;
 	}
 
-	for(size_t k = 0; k < num_devices; k++)
+	auto &selectedDevs = xmrstak::params::inst().openClDevices;
+	std::vector<int> device_indices;
+
+	if (!selectedDevs.empty())
+	{
+		std::vector<cl_device_id> temp;
+		for (auto idx : selectedDevs) {
+			if (idx >= 0 && idx < device_list.size()) {
+				temp.push_back(device_list[idx]);
+				device_indices.push_back(idx);
+			}
+		}
+		if (temp.empty()) {
+			printer::inst()->print_msg(L0, "WARNING: Device selection error with --opencl-devices. No devices selected.");
+			return ctxVec;
+		}
+		device_list = temp;
+
+	} else {
+		for (int di = 0; di < (int)num_devices; ++di) device_indices.push_back(di);
+	}
+
+	for(size_t k = 0; k < device_list.size(); k++)
 	{
 		std::vector<char> devVendorVec(1024);
 		if((clStatus = clGetDeviceInfo(device_list[k], CL_DEVICE_VENDOR, devVendorVec.size(), devVendorVec.data(), NULL)) != CL_SUCCESS)
 		{
 			printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get the device vendor name for device %u.", err_to_str(clStatus), k);
 			continue;
-		}
+		}devVendor
 
-		std::string devVendor(devVendorVec.data());
+		std::string (devVendorVec.data());
 
 		bool isAMDDevice = devVendor.find("Advanced Micro Devices") != std::string::npos || devVendor.find("AMD") != std::string::npos;
 		bool isNVIDIADevice = devVendor.find("NVIDIA Corporation") != std::string::npos || devVendor.find("NVIDIA") != std::string::npos;
@@ -625,7 +647,7 @@ std::vector<GpuContext> getAMDDevices(int index)
 			bool isHSAOpenCL = std::string(openCLDriverVer.data()).find("HSA") != std::string::npos;
 
 			// if environment variable GPU_SINGLE_ALLOC_PERCENT is not set we can not allocate the full memory
-			ctx.deviceIdx = k;
+			ctx.deviceIdx = device_indices[k];
 			ctx.name = std::string(devNameVec.data());
 			ctx.DeviceID = device_list[k];
 			ctx.interleave = 40;

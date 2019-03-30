@@ -4,6 +4,7 @@
 #include "xmrstak/misc/home_dir.hpp"
 
 #include <string>
+#include <vector>
 
 namespace xmrstak
 {
@@ -59,6 +60,14 @@ struct params
 	int benchmark_wait_sec = 30;
 	int benchmark_work_sec = 60;
 
+	// OpenCL device filter
+	std::vector<int> openClDevices;
+	bool rebuildAmdConfig;
+
+	// CUDA device filter
+	std::vector<int> cudaDevices;
+	bool rebuildNvidiaConfig;
+	
 	params() :
 		binaryName("xmr-stak"),
 		executablePrefix(""),
@@ -72,7 +81,9 @@ struct params
 		configFileAMD("amd.txt"),
 		rootAMDCacheDir(get_home() + "/.openclcache/"),
 		configFileCPU("cpu.txt"),
-		configFileNVIDIA("nvidia.txt")
+		configFileNVIDIA("nvidia.txt"),
+		rebuildAmdConfig(false),
+		rebuildNvidiaConfig(false)		
 	{
 	}
 };

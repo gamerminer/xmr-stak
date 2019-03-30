@@ -124,7 +124,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 
 	auto miner_algo = ::jconf::inst()->GetCurrentCoinSelection().GetDescription(1).GetMiningAlgoRoot();
 
-	if(!configEditor::file_exist(params::inst().configFileNVIDIA))
+	if (xmrstak::params::inst().rebuildNvidiaConfig || !configEditor::file_exist(params::inst().configFileNVIDIA))
 	{
 		autoAdjust adjust;
 		if(!adjust.printConfig())
@@ -147,14 +147,36 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 		std::cout << "NVIDIA: found " << deviceCount << " potential device's" << std::endl;
 	}
 
-	size_t i, n = jconf::inst()->GetGPUThreadCount();
-	pvThreads->reserve(n);
+	size_t nMax = jconf::inst()->GetGPUThreadCount();
+	const auto &selectedDevs = xmrstak::params::inst().cudaDevices;
+	std::vector<int> device_indices;
+	if (!selectedDevs.empty())
+	{
+		std::copy_if(
+			selectedDevs.begin(),
+			selectedDevs.end(),
+			std::back_inserter(device_indices),
+			[nMax](int i) {return i < (int)nMax; }
+		);
+	}
+	else
+	{
+		for (int i = 0; i < (int)nMax; ++i)
+			device_indices.push_back(i);
+	}
+
+	if (device_indices.empty()) {
+		printer::inst()->print_msg(L0, "WARNING: No cuda devices selected.");
+		return pvThreads;
+	}
+	pvThreads->reserve(device_indices.size());
 
 	cuInit(0);
 
 	jconf::thd_cfg cfg;
-	for(i = 0; i < n; i++)
+	for (size_t n = 0; n < device_indices.size(); n++)
 	{
+		size_t i = (size_t)device_indices[n];
 		jconf::inst()->GetGPUThreadConfig(i, cfg);
 
 		if(cfg.cpu_aff >= 0)
@@ -172,7 +194,7 @@ std::vector<iBackend*>* minethd::thread_starter(uint32_t threadOffset, miner_wor
 		pvThreads->push_back(thd);
 	}
 
-	for(i = 0; i < n; i++)
+	for (size_t i = 0; i < pvThreads->size(); i++)
 	{
 		static_cast<minethd*>((*pvThreads)[i])->start_mining();
 	}

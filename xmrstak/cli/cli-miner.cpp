@@ -54,6 +54,28 @@
 #include <windows.h>
 #endif // _WIN32
 
+#include <sstream>
+#include <algorithm>
+
+std::vector<int>
+splitDeviceList(const std::string &in)
+{
+	if (in.empty())
+		return{};
+
+	std::vector<int> elems;
+	std::stringstream ss(in);
+	std::string item;
+	size_t count = 0;
+	while (std::getline(ss, item, ','))
+		if (!item.empty() && item.length()<2) {
+			int val = std::atoi(item.c_str());
+			if (val>=0 && std::find(elems.begin(),elems.end(),val) == elems.end())
+				elems.push_back(val);
+		}
+	return elems;
+}
+
 int do_benchmark(int block_version, int wait_sec, int work_sec);
 
 void help()
@@ -85,10 +107,14 @@ void help()
 	cout << "                             default: AMD" << endl;
 	cout << "  --amdCacheDir DIRECTORY    directory to store AMD binary files" << endl;
 	cout << "  --amd FILE                 AMD backend miner config file" << endl;
+	cout << "  --opencl-devices dev1,..   OpenCL device indices" << endl;
+	cout << "  --rebuild-amd-config		Force rebuilding AMD config" << endl;
 #endif
 #ifndef CONF_NO_CUDA
 	cout << "  --noNVIDIA                 disable the NVIDIA miner backend" << endl;
 	cout << "  --nvidia FILE              NVIDIA backend miner config file" << endl;
+	cout << "  --cuda-devices dev1,..     CUDA device indices" << endl;
+	cout << "  --rebuild-nvidia-config    Force rebuilding NVIDIA config" << endl;
 #endif
 #ifndef CONF_NO_HTTPD
 	cout << "  -i --httpd HTTP_PORT       HTTP interface port" << endl;
@@ -725,6 +751,36 @@ int main(int argc, char* argv[])
 				return 1;
 			}
 			params::inst().benchmark_work_sec = worksec;
+		}
+		else if (opName.compare("--opencl-devices") == 0)
+		{
+			++i;
+			if (i >= argc)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--opencl-devices' given");
+				win_exit();
+				return 1;
+			}
+			params::inst().openClDevices = splitDeviceList(argv[i]);
+		}
+		else if (opName.compare("--rebuild-amd-config") == 0)
+		{
+			params::inst().rebuildAmdConfig = true;
+		}
+		else if (opName.compare("--cuda-devices") == 0)
+		{
+			++i;
+			if (i >= argc)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--cuda-devices' given");
+				win_exit();
+				return 1;
+			}
+			params::inst().cudaDevices = splitDeviceList(argv[i]);
+		}
+		else if (opName.compare("--rebuild-nvidia-config") == 0)
+		{
+			params::inst().rebuildNvidiaConfig = true;
 		}
 		else
 		{
