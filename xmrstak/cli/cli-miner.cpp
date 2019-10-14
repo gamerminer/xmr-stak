@@ -102,6 +102,7 @@ void help()
 #endif
 #ifndef CONF_NO_OPENCL
 	cout << "  --noAMD                    disable the AMD miner backend" << endl;
+	cout << "  --amdGpus GPUS             indices of AMD GPUs to use. Example: 0,2,3" << endl;
 	cout << "  --noAMDCache               disable the AMD(OpenCL) cache for precompiled binaries" << endl;
 	cout << "  --openCLVendor VENDOR      use OpenCL driver of VENDOR and devices [AMD,NVIDIA]" << endl;
 	cout << "                             default: AMD" << endl;
@@ -112,10 +113,13 @@ void help()
 #endif
 #ifndef CONF_NO_CUDA
 	cout << "  --noNVIDIA                 disable the NVIDIA miner backend" << endl;
+	cout << "  --nvidiaGpus GPUS          indices of NVIDIA GPUs to use. Example: 0,2,3" << endl;
 	cout << "  --nvidia FILE              NVIDIA backend miner config file" << endl;
 	cout << "  --cuda-devices dev1,..     CUDA device indices" << endl;
 	cout << "  --rebuild-nvidia-config    Force rebuilding NVIDIA config" << endl;
 #endif
+	cout << "  --log FILE                 miner output file" << endl;
+	cout << "  --h-print-time SEC         interval for printing hashrate, in seconds" << endl;
 #ifndef CONF_NO_HTTPD
 	cout << "  -i --httpd HTTP_PORT       HTTP interface port" << endl;
 #endif
@@ -221,7 +225,14 @@ inline void prompt_once(bool& prompted)
 	}
 }
 
-void do_guided_pool_config(const bool use_simple_start)
+inline bool use_simple_start()
+{
+	// ask this question only once
+	static bool simple_start = read_yes_no("\nUse simple setup method? (Y/n)", "Y");
+	return simple_start;
+}
+
+void do_guided_pool_config()
 {
 	using namespace xmrstak;
 
@@ -287,19 +298,22 @@ void do_guided_pool_config(const bool use_simple_start)
 	}
 
 	auto& rigid = params::inst().poolRigid;
-	if(!use_simple_start && rigid.empty() && !params::inst().userSetRigid)
+	if(rigid.empty() && !params::inst().userSetRigid)
 	{
-		prompt_once(prompted);
-
-		if(!stdin_flushed)
+		if(!use_simple_start())
 		{
-			// clear everything from stdin to allow an empty rigid
-			std::cin.clear();
-			std::cin.ignore(INT_MAX, '\n');
-		}
+			prompt_once(prompted);
 
-		std::cout << "- Rig identifier for pool-side statistics (needs pool support). Can be empty:" << std::endl;
-		getline(std::cin, rigid);
+			if(!stdin_flushed)
+			{
+				// clear everything from stdin to allow an empty rigid
+				std::cin.clear();
+				std::cin.ignore(INT_MAX, '\n');
+			}
+
+			std::cout << "- Rig identifier for pool-side statistics (needs pool support). Can be empty:" << std::endl;
+			getline(std::cin, rigid);
+		}
 	}
 
 	bool tls = params::inst().poolUseTls;
@@ -315,15 +329,19 @@ void do_guided_pool_config(const bool use_simple_start)
 #endif
 
 	bool nicehash = params::inst().nicehashMode;
-	if(!use_simple_start && !userSetPool)
+	if(!userSetPool)
 	{
-		prompt_once(prompted);
-		nicehash = read_yes_no("- Do you want to use nicehash on this pool? (y/N)", "N");
+		if(!use_simple_start())
+		{
+			prompt_once(prompted);
+			nicehash = read_yes_no("- Do you want to use nicehash on this pool? (y/N)", "N");
+		}
 	}
 
 	bool multipool = false;
-	if(!use_simple_start && !userSetPool)
-		multipool = read_yes_no("- Do you want to use multiple pools? (y/N)", "N");
+	if(!userSetPool)
+		if(!use_simple_start())
+			multipool = read_yes_no("- Do you want to use multiple pools? (y/N)", "N");
 
 	int64_t pool_weight = 1;
 	if(multipool)
@@ -361,7 +379,7 @@ void do_guided_pool_config(const bool use_simple_start)
 	std::cout << "Pool configuration stored in file '" << params::inst().configFilePools << "'" << std::endl;
 }
 
-void do_guided_config(const bool use_simple_start)
+void do_guided_config()
 {
 	using namespace xmrstak;
 
@@ -379,7 +397,7 @@ void do_guided_config(const bool use_simple_start)
 	{
 		http_port = params::httpd_port_disabled;
 #ifndef CONF_NO_HTTPD
-		if(!use_simple_start)
+		if(!use_simple_start())
 		{
 			prompt_once(prompted);
 
@@ -400,6 +418,8 @@ void do_guided_config(const bool use_simple_start)
 	}
 
 	configTpl.replace("HTTP_PORT", std::to_string(http_port));
+	configTpl.replace("OUTPUT_FILE", params::inst().outputFile);
+	configTpl.replace("H_PRINT_TIME", std::to_string(params::inst().h_print_time > 0 ? params::inst().h_print_time : 300));
 	configTpl.write(params::inst().configFile);
 	std::cout << "Configuration stored in file '" << params::inst().configFile << "'" << std::endl;
 }
@@ -481,6 +501,17 @@ int main(int argc, char* argv[])
 		{
 			params::inst().useAMD = false;
 		}
+		else if (opName.compare("--amdGpus") == 0)
+		{
+			++i;
+			if (i >= argc)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--amdGpus' given");
+				win_exit();
+				return 1;
+			}
+			params::inst().amdGpus = argv[i];
+		}
 		else if(opName.compare("--openCLVendor") == 0)
 		{
 			++i;
@@ -506,6 +537,17 @@ int main(int argc, char* argv[])
 		else if(opName.compare("--noNVIDIA") == 0)
 		{
 			params::inst().useNVIDIA = false;
+		}
+		else if (opName.compare("--nvidiaGpus") == 0)
+		{
+			++i;
+			if (i >= argc)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--nvidiaGpus' given");
+				win_exit();
+				return 1;
+			}
+			params::inst().nvidiaGpus = argv[i];
 		}
 		else if(opName.compare("--cpu") == 0)
 		{
@@ -669,6 +711,36 @@ int main(int argc, char* argv[])
 			}
 			params::inst().configFilePools = argv[i];
 		}
+		else if(opName.compare("--log") == 0)
+		{
+			++i;
+			if(i >= argc)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--log' given");
+				win_exit();
+				return 1;
+			}
+			params::inst().outputFile = argv[i];
+		}
+		else if (opName.compare("--h-print-time") == 0)
+		{
+			++i;
+			if (i >= argc)
+			{
+				printer::inst()->print_msg(L0, "No argument for parameter '--h-print-time' given");
+				win_exit();
+				return 1;
+			}
+			char* h_print_time = nullptr;
+			long int time = strtol(argv[i], &h_print_time, 10);
+
+			if (time <= 0)
+			{
+				printer::inst()->print_msg(L0, "Hashrate print time must be > 0");
+				return 1;
+			}
+			params::inst().h_print_time = time;
+		}
 		else if(opName.compare("-i") == 0 || opName.compare("--httpd") == 0)
 		{
 			++i;
@@ -793,17 +865,13 @@ int main(int argc, char* argv[])
 	bool hasConfigFile = configEditor::file_exist(params::inst().configFile);
 	bool hasPoolConfig = configEditor::file_exist(params::inst().configFilePools);
 
-	if(!hasConfigFile || !hasPoolConfig)
-	{
-		bool use_simple_start = read_yes_no("\nUse simple setup method? (Y/n)", "Y");
+	// check if we need a guided start
+	if(!hasConfigFile)
+		do_guided_config();
 
-		// check if we need a guided start
-		if(!hasConfigFile)
-			do_guided_config(use_simple_start);
+	if(!hasPoolConfig)
+		do_guided_pool_config();
 
-		if(!hasPoolConfig)
-			do_guided_pool_config(use_simple_start);
-	}
 	if(!jconf::inst()->parse_config(params::inst().configFile.c_str(), params::inst().configFilePools.c_str()))
 	{
 		win_exit();
@@ -940,7 +1008,7 @@ int do_benchmark(int block_version, int wait_sec, int work_sec)
 	/* AMD and NVIDIA is currently only supporting work sizes up to 128byte
 	 */
 	printer::inst()->print_msg(L0, "Start a %d second benchmark...", work_sec);
-	xmrstak::globalStates::inst().switch_work(xmrstak::miner_work("", work, 128, 0, false, 0, 0), dat);
+	xmrstak::globalStates::inst().switch_work(xmrstak::miner_work("", work, 128, 0, false, 1, 0), dat);
 	uint64_t iStartStamp = get_timestamp_ms();
 
 	std::this_thread::sleep_for(std::chrono::seconds(work_sec));

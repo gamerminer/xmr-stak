@@ -40,6 +40,7 @@
 
 #ifndef CONF_NO_HWLOC
 #include "autoAdjustHwloc.hpp"
+#include "autoAdjust.hpp"
 #else
 #include "autoAdjust.hpp"
 #endif
@@ -515,9 +516,23 @@ std::vector<iBackend*> minethd::thread_starter(uint32_t threadOffset, miner_work
 
 	if(!configEditor::file_exist(params::inst().configFileCPU))
 	{
+#ifndef CONF_NO_HWLOC
+		autoAdjustHwloc adjustHwloc;
+		if(!adjustHwloc.printConfig())
+		{
+			autoAdjust adjust;
+			if(!adjust.printConfig())
+			{
+				return pvThreads;
+			}
+		}
+#else
 		autoAdjust adjust;
 		if(!adjust.printConfig())
+		{
 			return pvThreads;
+		}
+#endif
 	}
 
 	if(!jconf::inst()->parse_config())
@@ -833,6 +848,7 @@ void minethd::multiway_work_main()
 
 	cryptonight_ctx* ctx[MAX_N];
 	uint64_t iCount = 0;
+	uint64_t iLastCount = 0;
 	uint64_t* piHashVal[MAX_N];
 	uint32_t* piNonce[MAX_N];
 	uint8_t bHashOut[MAX_N * 32];
@@ -915,9 +931,8 @@ void minethd::multiway_work_main()
 		{
 			if((iCount++ & 0x7) == 0) //Store stats every 8*N hashes
 			{
-				uint64_t iStamp = get_timestamp_ms();
-				iHashCount.store(iCount * N, std::memory_order_relaxed);
-				iTimestamp.store(iStamp, std::memory_order_relaxed);
+				updateStats((iCount - iLastCount) * N, oWork.iPoolId);
+				iLastCount = iCount;
 			}
 
 			nonce_ctr -= N;

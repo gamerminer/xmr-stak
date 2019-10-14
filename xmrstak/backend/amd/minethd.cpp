@@ -53,6 +53,7 @@ minethd::minethd(miner_work& pWork, size_t iNo, GpuContext* ctx, const jconf::th
 	oWork = pWork;
 	bQuit = 0;
 	iThreadNo = (uint8_t)iNo;
+	this->iGpuIndex = cfg.index;
 	iJobNo = 0;
 	iHashCount = 0;
 	iTimestamp = 0;
@@ -172,7 +173,6 @@ void minethd::work_main()
 	lck.release();
 	std::this_thread::yield();
 
-	uint64_t iCount = 0;
 	cryptonight_ctx* cpu_ctx;
 	cpu_ctx = cpu::minethd::minethd_alloc_ctx();
 
@@ -288,10 +288,7 @@ void minethd::work_main()
 					executor::inst()->push_event(ex_event("AMD Invalid Result", pGpuCtx->deviceIdx, oWork.iPoolId));
 			}
 
-			iCount += pGpuCtx->rawIntensity;
-			uint64_t iStamp = get_timestamp_ms();
-			iHashCount.store(iCount, std::memory_order_relaxed);
-			iTimestamp.store(iStamp, std::memory_order_relaxed);
+			updateStats(pGpuCtx->rawIntensity, oWork.iPoolId);
 
 			accRuntime += updateTimings(pGpuCtx, t0);
 
