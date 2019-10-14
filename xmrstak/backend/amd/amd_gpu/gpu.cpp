@@ -593,9 +593,9 @@ std::vector<GpuContext> getAMDDevices(int index)
 		{
 			printer::inst()->print_msg(L1, "WARNING: %s when calling clGetDeviceInfo to get the device vendor name for device %u.", err_to_str(clStatus), k);
 			continue;
-		}devVendor
-
-		std::string (devVendorVec.data());
+		}
+	
+		std::string devVendor(devVendorVec.data());
 
 		bool isAMDDevice = devVendor.find("Advanced Micro Devices") != std::string::npos || devVendor.find("AMD") != std::string::npos;
 		bool isNVIDIADevice = devVendor.find("NVIDIA Corporation") != std::string::npos || devVendor.find("NVIDIA") != std::string::npos;
